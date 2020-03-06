@@ -66,7 +66,7 @@ def radiation_and_temperature(time):
     #   2001-12-31T23:00:00
     #   2019-01-01T00:00:00
     limits = [tdt(time + " {}".format(year)) for year in range(2001, 2020)]
-    delta = Timedelta("5d3h")
+    delta = Timedelta("5d3h15m")
     limits = [(limit - delta, limit + delta) for limit in limits]
     radiation = reduce(
         lambda df1, df2: df1.append(df2),
