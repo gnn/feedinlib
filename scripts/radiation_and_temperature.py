@@ -87,12 +87,18 @@ def radiation_and_temperature(time):
                 start=start,
                 stop=stop,
                 locations=[point],
-                variables=["T"],
+                variables=["T", "T_2M"],
                 **default
             ).series
             for (start, stop) in limits
         ),
     )
+    for key in temperature:
+        # key[1] is the variable's name
+        if key[1] == "T_2M":
+            assert (key[0], "T", key[2]) not in temperature
+            temperature[(key[0], "T", key[2])] = temperature[key]
+            del temperature[key]
     return radiation, temperature
 
 
