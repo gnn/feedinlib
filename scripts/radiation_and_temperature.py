@@ -1,7 +1,6 @@
 from functools import reduce
 from itertools import chain
 from pprint import pprint as pp
-import csv
 import sys
 
 from geoalchemy2.elements import WKTElement as WKTE
@@ -68,7 +67,7 @@ def radiation_and_temperature(time):
     limits = [tdt(time + " {}".format(year)) for year in range(2001, 2020)]
     delta = Timedelta("5d3h15m")
     limits = [(limit - delta, limit + delta) for limit in limits]
-    radiation = reduce(
+    df = reduce(
         lambda df1, df2: df1.append(df2),
         (
             reduce(
@@ -76,75 +75,59 @@ def radiation_and_temperature(time):
                 [
                     DF(
                         index=DI([stop for (_, stop, __) in tuples]),
-                        data={k[1]: [value for (_, __, value) in tuples],},
+                        data={
+                            (
+                                k[1]
+                                if not k[2]
+                                else "{}: {}m".format(k[1], k[2])
+                            ): [value for (_, __, value) in tuples],
+                        },
                     )
                     for k in series
                     for tuples in [series[k]]
                 ]
                 or [DF(index=DI([]))],
             )
+            .resample("30min")
+            .apply(lambda xs: xs.sum() / len(xs))
             for (start, stop) in limits
             for series in [
                 open_FRED.Weather(
                     start=start,
                     stop=stop,
                     locations=[point],
-                    variables=["ASWDIFD_S", "ASWDIR_S", "ASWDIRN_S"],
+                    variables=[
+                        "ASWDIFD_S",
+                        "ASWDIR_S",
+                        "ASWDIRN_S",
+                        "T",
+                        # "T_2M",
+                    ],
                     **default
                 ).series
             ]
         ),
     )
-    temperature = reduce(
-        lambda d1, d2: {
-            k: d1.get(k, []) + d2.get(k, []) for k in set(chain(d1, d2))
-        },
-        (
-            open_FRED.Weather(
-                start=start,
-                stop=stop,
-                locations=[point],
-                variables=["T", "T_2M"],
-                **default
-            ).series
-            for (start, stop) in limits
-        ),
-    )
-    for key in temperature:
-        # key[1] is the variable's name
-        if key[1] == "T_2M":
-            assert (key[0], "T", key[2]) not in temperature
-            temperature[(key[0], "T", key[2])] = temperature[key]
-            del temperature[key]
-    return radiation, temperature
+    return df
 
 
-radiation, temperature = radiation_and_temperature("10th January 9am")
+df = radiation_and_temperature("10th January 9am")
 
-fields = ["start", "stop", "ASWDIFD_S", "ASWDIR_S", "ASWDIRN_S"]
-radiation.to_csv(
-    "radiation.{0[0]}-{0[1]}.csv".format(site),
+fields = [
+    "ASWDIFD_S",
+    "ASWDIR_S",
+    "ASWDIRN_S",
+    "T: 10.0m",
+    "T: 80.0m",
+    "T: 100.0m",
+    "T: 120.0m",
+    "T: 140.0m",
+    "T: 160.0m",
+    "T: 200.0m",
+    "T: 240.0m",
+]
+df.to_csv(
+    "rat.{0[0]}-{0[1]}.csv".format(site),
     columns=fields,
-    index=False,
     date_format="%Y-%m-%dT%H:%M:%S+00:00",
 )
-
-keys = sorted(set((v[0], v[1]) for v in chain(*temperature.values())))
-fields = ["start", "stop"] + [
-    "T: {}m".format(height) for height in sorted(k[2] for k in temperature)
-]
-rows = {
-    (start, stop): {"start": start.isoformat(), "stop": stop.isoformat()}
-    for (start, stop) in keys
-}
-for k in temperature:
-    for start, stop, value in temperature[k]:
-        rows[start, stop]["T: {}m".format(k[2])] = value
-rows = [rows[k] for k in keys]
-
-with open(
-    "temperature.{0[0]}-{0[1]}.csv".format(site), "w", newline=""
-) as csvfile:
-    writer = csv.DictWriter(csvfile, fieldnames=fields)
-    writer.writeheader()
-    writer.writerows(rows)
