@@ -91,13 +91,13 @@ def radiation_and_temperature(time):
             )
             for (start, stop) in limits
             for series in [
-            open_FRED.Weather(
-                start=start,
-                stop=stop,
-                locations=[point],
-                variables=["ASWDIFD_S", "ASWDIR_S", "ASWDIRN_S"],
-                **default
-            ).series
+                open_FRED.Weather(
+                    start=start,
+                    stop=stop,
+                    locations=[point],
+                    variables=["ASWDIFD_S", "ASWDIR_S", "ASWDIRN_S"],
+                    **default
+                ).series
             ]
         ),
     )
