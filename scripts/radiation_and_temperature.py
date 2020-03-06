@@ -72,17 +72,11 @@ def radiation_and_temperature(time):
         lambda df1, df2: df1.append(df2),
         (
             reduce(
-                lambda df1, df2: df1.join(
-                    df2.loc[:, [c for c in df2 if not c in df1]], how="outer"
-                ),
+                lambda df1, df2: df1.join(df2, how="outer"),
                 [
                     DF(
                         index=DI([stop for (_, stop, __) in tuples]),
-                        data={
-                            k[1]: [value for (_, __, value) in tuples],
-                            "start": [start for (start, _, __) in tuples],
-                            "stop": [stop for (_, stop, __) in tuples],
-                        },
+                        data={k[1]: [value for (_, __, value) in tuples],},
                     )
                     for k in series
                     for tuples in [series[k]]
