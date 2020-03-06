@@ -1,0 +1,139 @@
+from functools import reduce
+from itertools import chain
+from pprint import pprint as pp
+import csv
+import sys
+
+from geoalchemy2.elements import WKTElement as WKTE
+from geoalchemy2.shape import to_shape
+from pandas import Timedelta, to_datetime as tdt
+from shapely.geometry import Point
+from sqlalchemy.orm import contains_eager as c_e
+import geopandas as gpd
+
+import feedinlib.open_FRED as open_FRED
+
+
+default = open_FRED.defaultdb()
+session = default["session"]
+db = default["db"]
+
+
+# This is just an example. Use different latitude/longitude if want data from
+# a different location.
+point = Point(9.7311, 53.3899)
+
+# The chosen point is probably not among the give measurement sites, so we need
+# to figure out wich measurement site is closest to the given point.
+# The corresponding code is copied from [`feedinlib.open_FRED.location`][0].
+#
+# [0]: https://github.com/oemof/feedinlib/blob/a0094c7d277b289cb6f5222d184d081b0f7eea5f/feedinlib/open_FRED.py#L301
+site = (lambda p: (p.x, p.y))(
+    to_shape(
+        session.query(db["Location"])
+        .order_by(
+            db["Location"].point.distance_centroid(
+                WKTE(point.to_wkt(), srid=4326)
+            )
+        )
+        .first()
+        .point
+    )
+)
+
+
+def radiation_and_temperature(time):
+    """ Gets all radiation and temperature data available for the `time`.
+
+    Just supply a time, like e.g.
+
+        - "10th of January, 09:15",
+        - "January 10th, 9am" or even
+        - "01/10 9am"
+
+    and the function will return matching time series data in the range
+        ```
+        time - (5 days and 3 hours)
+        ```
+    for each available year.
+    """
+    # This is the minimum start and the maximum stop one could query:
+    #   2001-12-31T23:00:00
+    #   2019-01-01T00:00:00
+    limits = [tdt(time + " {}".format(year)) for year in range(2001, 2020)]
+    delta = Timedelta("5d3h")
+    limits = [(limit - delta, limit + delta) for limit in limits]
+    radiation = reduce(
+        lambda d1, d2: {
+            k: d1.get(k, []) + d2.get(k, []) for k in set(chain(d1, d2))
+        },
+        (
+            open_FRED.Weather(
+                start=start,
+                stop=stop,
+                locations=[point],
+                variables=["ASWDIFD_S", "ASWDIR_S", "ASWDIRN_S"],
+                **default
+            ).series
+            for (start, stop) in limits
+        ),
+    )
+    temperature = reduce(
+        lambda d1, d2: {
+            k: d1.get(k, []) + d2.get(k, []) for k in set(chain(d1, d2))
+        },
+        (
+            open_FRED.Weather(
+                start=start,
+                stop=stop,
+                locations=[point],
+                variables=["T"],
+                **default
+            ).series
+            for (start, stop) in limits
+        ),
+    )
+    return radiation, temperature
+
+
+radiation, temperature = radiation_and_temperature("10th January 9am")
+
+keys = sorted(set((v[0], v[1]) for v in chain(*radiation.values())))
+fields = ["start", "stop", "ASWDIFD_S", "ASWDIR_S", "ASWDIRN_S"]
+rows = {
+    (start, stop): {"start": start.isoformat(), "stop": stop.isoformat()}
+    for (start, stop) in keys
+}
+for k in radiation:
+    for start, stop, value in radiation[k]:
+        rows[start, stop][k[1]] = value
+rows = [rows[k] for k in keys]
+
+with open(
+    "radiation.{0[0]}-{0[1]}.csv".format(site), "w", newline=""
+) as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(rows)
+
+
+keys = sorted(set((v[0], v[1]) for v in chain(*temperature.values())))
+fields = ["start", "stop"] + [
+    "T at {}m height".format(height)
+    for height in sorted(k[2] for k in temperature)
+]
+rows = {
+    (start, stop): {"start": start.isoformat(), "stop": stop.isoformat()}
+    for (start, stop) in keys
+}
+for k in temperature:
+    for start, stop, value in temperature[k]:
+        rows[start, stop]["T at {}m height".format(k[2])] = value
+rows = [rows[k] for k in keys]
+
+with open(
+    "temperature.{0[0]}-{0[1]}.csv".format(site), "w", newline=""
+) as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(rows)
