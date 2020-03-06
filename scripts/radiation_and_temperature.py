@@ -125,8 +125,7 @@ with open(
 
 keys = sorted(set((v[0], v[1]) for v in chain(*temperature.values())))
 fields = ["start", "stop"] + [
-    "T at {}m height".format(height)
-    for height in sorted(k[2] for k in temperature)
+    "T: {}m".format(height) for height in sorted(k[2] for k in temperature)
 ]
 rows = {
     (start, stop): {"start": start.isoformat(), "stop": stop.isoformat()}
@@ -134,7 +133,7 @@ rows = {
 }
 for k in temperature:
     for start, stop, value in temperature[k]:
-        rows[start, stop]["T at {}m height".format(k[2])] = value
+        rows[start, stop]["T: {}m".format(k[2])] = value
 rows = [rows[k] for k in keys]
 
 with open(
