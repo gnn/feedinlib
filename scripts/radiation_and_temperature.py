@@ -6,7 +6,12 @@ import sys
 
 from geoalchemy2.elements import WKTElement as WKTE
 from geoalchemy2.shape import to_shape
-from pandas import Timedelta, to_datetime as tdt
+from pandas import (
+    DatetimeIndex as DI,
+    DataFrame as DF,
+    Timedelta,
+    to_datetime as tdt,
+)
 from shapely.geometry import Point
 from sqlalchemy.orm import contains_eager as c_e
 import geopandas as gpd
@@ -64,10 +69,28 @@ def radiation_and_temperature(time):
     delta = Timedelta("5d3h")
     limits = [(limit - delta, limit + delta) for limit in limits]
     radiation = reduce(
-        lambda d1, d2: {
-            k: d1.get(k, []) + d2.get(k, []) for k in set(chain(d1, d2))
-        },
+        lambda df1, df2: df1.append(df2),
         (
+            reduce(
+                lambda df1, df2: df1.join(
+                    df2.loc[:, [c for c in df2 if not c in df1]], how="outer"
+                ),
+                [
+                    DF(
+                        index=DI([stop for (_, stop, __) in tuples]),
+                        data={
+                            k[1]: [value for (_, __, value) in tuples],
+                            "start": [start for (start, _, __) in tuples],
+                            "stop": [stop for (_, stop, __) in tuples],
+                        },
+                    )
+                    for k in series
+                    for tuples in [series[k]]
+                ]
+                or [DF(index=DI([]))],
+            )
+            for (start, stop) in limits
+            for series in [
             open_FRED.Weather(
                 start=start,
                 stop=stop,
@@ -75,7 +98,7 @@ def radiation_and_temperature(time):
                 variables=["ASWDIFD_S", "ASWDIR_S", "ASWDIRN_S"],
                 **default
             ).series
-            for (start, stop) in limits
+            ]
         ),
     )
     temperature = reduce(
@@ -104,24 +127,13 @@ def radiation_and_temperature(time):
 
 radiation, temperature = radiation_and_temperature("10th January 9am")
 
-keys = sorted(set((v[0], v[1]) for v in chain(*radiation.values())))
 fields = ["start", "stop", "ASWDIFD_S", "ASWDIR_S", "ASWDIRN_S"]
-rows = {
-    (start, stop): {"start": start.isoformat(), "stop": stop.isoformat()}
-    for (start, stop) in keys
-}
-for k in radiation:
-    for start, stop, value in radiation[k]:
-        rows[start, stop][k[1]] = value
-rows = [rows[k] for k in keys]
-
-with open(
-    "radiation.{0[0]}-{0[1]}.csv".format(site), "w", newline=""
-) as csvfile:
-    writer = csv.DictWriter(csvfile, fieldnames=fields)
-    writer.writeheader()
-    writer.writerows(rows)
-
+radiation.to_csv(
+    "radiation.{0[0]}-{0[1]}.csv".format(site),
+    columns=fields,
+    index=False,
+    date_format="%Y-%m-%dT%H:%M:%S+00:00",
+)
 
 keys = sorted(set((v[0], v[1]) for v in chain(*temperature.values())))
 fields = ["start", "stop"] + [
