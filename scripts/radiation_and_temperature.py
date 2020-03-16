@@ -69,7 +69,6 @@ def radiation_and_temperature(time):
     #   2019-01-01T00:00:00
     timepoints = [tdt(time + " {}".format(year)) for year in range(2001, 2020)]
     delta = Timedelta("5d2h15m")
-    limits = [(tp - delta, tp + delta) for tp in timepoints]
     df = reduce(
         lambda df1, df2: df1.append(df2),
         (
@@ -93,7 +92,8 @@ def radiation_and_temperature(time):
             )
             .resample("30min")
             .apply(lambda xs: xs.sum() / len(xs))
-            for (start, stop) in limits
+            for tp in timepoints
+            for (start, stop) in [(tp - delta, tp + delta)]
             for series in [
                 open_FRED.Weather(
                     start=start,
