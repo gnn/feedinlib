@@ -8,6 +8,8 @@ from geoalchemy2.shape import to_shape
 from pandas import (
     DatetimeIndex as DI,
     DataFrame as DF,
+    Interval,
+    IntervalIndex as II,
     Timedelta,
     date_range,
     to_datetime as tdt,
@@ -66,13 +68,7 @@ def radiation_and_temperature(time):
     #   2001-12-31T23:00:00
     #   2019-01-01T00:00:00
     timepoints = [tdt(time + " {}".format(year)) for year in range(2001, 2020)]
-    delta = Timedelta("5d")
-    timepoints = [
-        day
-        for tp in timepoints
-        for day in date_range(tp - delta, tp + delta, freq="1d")
-    ]
-    delta = Timedelta("2h15m")
+    delta = Timedelta("5d2h15m")
     limits = [(tp - delta, tp + delta) for tp in timepoints]
     df = reduce(
         lambda df1, df2: df1.append(df2),
@@ -115,6 +111,15 @@ def radiation_and_temperature(time):
             ]
         ),
     )
+    delta = Timedelta("5d")
+    timepoints = [
+        day
+        for tp in timepoints
+        for day in date_range(tp - delta, tp + delta, freq="1d")
+    ]
+    delta = Timedelta("2h15m")
+    ii = II(data=[Interval(tp - delta, tp + delta) for tp in timepoints])
+    df = df[[ii.contains(ix) for ix in df.index]]
     return df
 
 
