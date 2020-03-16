@@ -92,6 +92,7 @@ def radiation_and_temperature(time):
             )
             .resample("30min")
             .apply(lambda xs: xs.sum() / len(xs))
+            .loc[lambda df: [ii.contains(ix) for ix in df.index]]
             for tp in timepoints
             for (start, stop) in [(tp - delta, tp + delta)]
             for series in [
@@ -109,17 +110,17 @@ def radiation_and_temperature(time):
                     **default
                 ).series
             ]
+            for ydlt, ddlt in [(Timedelta("5d"), Timedelta("2h15m"))]
+            for ii in [
+                II(
+                    data=[
+                        Interval(day - ddlt, day + ddlt)
+                        for day in date_range(tp - ydlt, tp + ydlt, freq="1d",)
+                    ]
+                )
+            ]
         ),
     )
-    delta = Timedelta("5d")
-    timepoints = [
-        day
-        for tp in timepoints
-        for day in date_range(tp - delta, tp + delta, freq="1d")
-    ]
-    delta = Timedelta("2h15m")
-    ii = II(data=[Interval(tp - delta, tp + delta) for tp in timepoints])
-    df = df[[ii.contains(ix) for ix in df.index]]
     return df
 
 
