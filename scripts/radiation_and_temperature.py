@@ -64,9 +64,9 @@ def radiation_and_temperature(time):
     # This is the minimum start and the maximum stop one could query:
     #   2001-12-31T23:00:00
     #   2019-01-01T00:00:00
-    limits = [tdt(time + " {}".format(year)) for year in range(2001, 2020)]
+    timepoints = [tdt(time + " {}".format(year)) for year in range(2001, 2020)]
     delta = Timedelta("5d3h15m")
-    limits = [(limit - delta, limit + delta) for limit in limits]
+    limits = [(tp - delta, tp + delta) for tp in timepoints]
     df = reduce(
         lambda df1, df2: df1.append(df2),
         (
