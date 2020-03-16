@@ -51,7 +51,7 @@ def radiation_and_temperature(time):
 
     Just supply a time, like e.g.
 
-        - "10th of January, 09:15",
+        - "10th of January, 09:00",
         - "January 10th, 9am" or even
         - "01/10 9am"
 
