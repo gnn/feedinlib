@@ -111,14 +111,11 @@ def radiation_and_temperature(time):
             ]
         ),
     )
-    delta = Timedelta("5d")
-    timepoints = [
-        day
-        for tp in timepoints
-        for day in date_range(tp - delta, tp + delta, freq="1d")
-    ]
-    delta = Timedelta("2h15m")
-    ii = II(data=[Interval(tp - delta, tp + delta) for tp in timepoints])
+    ydelta, daydelta = Timedelta("5d"), Timedelta("2h15m")
+    days = chain(
+        *(date_range(tp - ydelta, tp + ydelta, freq="1d") for tp in timepoints)
+    )
+    ii = II(data=[Interval(day - daydelta, day + daydelta) for day in days])
     df = df[[ii.contains(ix) for ix in df.index]]
     return df
 
