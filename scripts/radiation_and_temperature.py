@@ -26,8 +26,8 @@ session = default["session"]
 db = default["db"]
 
 
-# This is just an example. Use different latitude/longitude if want data from
-# a different location.
+# This is just an example. Use a different latitude/longitude if you want data
+# from a different location.
 point = Point(9.7311, 53.3899)
 
 # The chosen point is probably not among the give measurement sites, so we need
