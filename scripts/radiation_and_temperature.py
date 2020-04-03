@@ -1,5 +1,4 @@
 from functools import reduce
-from itertools import chain
 from pprint import pprint as pp
 import sys
 
@@ -109,8 +108,10 @@ def radiation_and_temperature(time, location_ids):
         ),
     )
     ydelta, daydelta = Timedelta("5d"), Timedelta("2h15m")
-    days = chain(
-        *(date_range(tp - ydelta, tp + ydelta, freq="1d") for tp in timepoints)
+    days = (
+        day
+        for tp in timepoints
+        for day in date_range(tp - ydelta, tp + ydelta, freq="1d", tz="UTC")
     )
     ii = II(data=[Interval(day - daydelta, day + daydelta) for day in days])
     df = df[[ii.contains(ix) for ix in df.index]]
