@@ -35,21 +35,16 @@ point = Point(9.7311, 53.3899)
 # The corresponding code is copied from [`feedinlib.open_FRED.location`][0].
 #
 # [0]: https://github.com/oemof/feedinlib/blob/a0094c7d277b289cb6f5222d184d081b0f7eea5f/feedinlib/open_FRED.py#L301
-site = (lambda p: (p.x, p.y))(
-    to_shape(
-        session.query(db["Location"])
-        .order_by(
-            db["Location"].point.distance_centroid(
-                WKTE(point.to_wkt(), srid=4326)
-            )
-        )
-        .first()
-        .point
+location = (
+    session.query(db["Location"])
+    .order_by(
+        db["Location"].point.distance_centroid(WKTE(point.to_wkt(), srid=4326))
     )
+    .first()
 )
 
 
-def radiation_and_temperature(time):
+def radiation_and_temperature(time, location_ids):
     """ Gets all radiation and temperature data available for the `time`.
 
     Just supply a time, like e.g.
@@ -98,7 +93,8 @@ def radiation_and_temperature(time):
                 open_FRED.Weather(
                     start=start,
                     stop=stop,
-                    locations=[point],
+                    locations=[],
+                    location_ids=location_ids,
                     heights=[10],
                     variables=[
                         "ASWDIFD_S",
@@ -121,7 +117,7 @@ def radiation_and_temperature(time):
     return df
 
 
-df = radiation_and_temperature("10th January 9am")
+df = radiation_and_temperature("10th January 9am", [location.id])
 
 fields = [
     "ASWDIFD_S",
@@ -130,7 +126,9 @@ fields = [
     "T: 10.0m",
 ]
 df.to_csv(
-    "rat.{0[0]}-{0[1]}.csv".format(site),
+    "rat.{0[0]}-{0[1]}.csv".format(
+        (lambda p: (p.x, p.y))(to_shape(location.point))
+    ),
     columns=fields,
     date_format="%Y-%m-%dT%H:%M:%S+00:00",
 )
