@@ -114,7 +114,7 @@ def radiation_and_temperature(time, location_ids):
         for day in date_range(tp - ydelta, tp + ydelta, freq="1d", tz="UTC")
     )
     ii = II(data=[Interval(day - daydelta, day + daydelta) for day in days])
-    df = df[[ii.contains(ix) for ix in df.index]]
+    df = df[[ii.contains(ix).any() for ix in df.index]]
     return df
 
 
