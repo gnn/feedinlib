@@ -99,6 +99,7 @@ def radiation_and_temperature(time):
                     start=start,
                     stop=stop,
                     locations=[point],
+                    heights=[10],
                     variables=[
                         "ASWDIFD_S",
                         "ASWDIR_S",
@@ -127,13 +128,6 @@ fields = [
     "ASWDIR_S",
     "ASWDIRN_S",
     "T: 10.0m",
-    "T: 80.0m",
-    "T: 100.0m",
-    "T: 120.0m",
-    "T: 140.0m",
-    "T: 160.0m",
-    "T: 200.0m",
-    "T: 240.0m",
 ]
 df.to_csv(
     "rat.{0[0]}-{0[1]}.csv".format(site),
