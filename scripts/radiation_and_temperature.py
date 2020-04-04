@@ -66,26 +66,7 @@ def radiation_and_temperature(time, location_ids):
     df = reduce(
         lambda df1, df2: df1.append(df2),
         (
-            reduce(
-                lambda df1, df2: df1.join(df2, how="outer"),
-                [
-                    DF(
-                        index=DI([stop for (_, stop, __) in tuples]),
-                        data={
-                            (
-                                k[1]
-                                if not k[2]
-                                else "{}: {}m".format(k[1], k[2])
-                            ): [value for (_, __, value) in tuples],
-                        },
-                    )
-                    for k in series
-                    for tuples in [series[k]]
-                ]
-                or [DF(index=DI([]))],
-            )
-            .resample("30min")
-            .mean()
+            df.resample("30min").mean()
             for tp in timepoints
             for (start, stop) in [(tp - delta, tp + delta)]
             for series in [
@@ -104,6 +85,26 @@ def radiation_and_temperature(time, location_ids):
                     ],
                     **default
                 ).series
+            ]
+            for df in [
+                reduce(
+                    lambda df1, df2: df1.join(df2, how="outer"),
+                    [
+                        DF(
+                            index=DI([stop for (_, stop, __) in tuples]),
+                            data={
+                                (
+                                    k[1]
+                                    if not k[2]
+                                    else "{}: {}m".format(k[1], k[2])
+                                ): [value for (_, __, value) in tuples],
+                            },
+                        )
+                        for k in series
+                        for tuples in [series[k]]
+                    ]
+                    or [DF(index=DI([]))],
+                )
             ]
         ),
     )
