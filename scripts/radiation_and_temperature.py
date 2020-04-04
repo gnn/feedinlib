@@ -85,7 +85,7 @@ def radiation_and_temperature(time, location_ids):
                 or [DF(index=DI([]))],
             )
             .resample("30min")
-            .apply(lambda xs: xs.sum() / len(xs))
+            .mean()
             for tp in timepoints
             for (start, stop) in [(tp - delta, tp + delta)]
             for series in [
