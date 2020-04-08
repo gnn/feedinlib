@@ -1,4 +1,5 @@
 from functools import reduce
+from itertools import groupby
 from pprint import pprint as pp
 import sys
 
@@ -7,8 +8,10 @@ from geoalchemy2.shape import to_shape
 from pandas import (
     DatetimeIndex as DI,
     DataFrame as DF,
+    Grouper,
     Interval,
     IntervalIndex as II,
+    MultiIndex as MI,
     Timedelta,
     date_range,
     to_datetime as tdt,
@@ -34,12 +37,13 @@ point = Point(9.7311, 53.3899)
 # The corresponding code is copied from [`feedinlib.open_FRED.location`][0].
 #
 # [0]: https://github.com/oemof/feedinlib/blob/a0094c7d277b289cb6f5222d184d081b0f7eea5f/feedinlib/open_FRED.py#L301
-location = (
+locations = (
     session.query(db["Location"])
     .order_by(
         db["Location"].point.distance_centroid(WKTE(point.to_wkt(), srid=4326))
     )
-    .first()
+    .limit(1)
+    .all()
 )
 
 
@@ -66,7 +70,12 @@ def radiation_and_temperature(time, location_ids):
     df = reduce(
         lambda df1, df2: df1.append(df2),
         (
-            df.resample("30min").mean()
+            df.groupby(
+                [
+                    df.index.get_level_values(0),
+                    Grouper(freq="30min", level=-1),
+                ]
+            ).apply(lambda df: df if df.empty else df.mean())
             for tp in timepoints
             for (start, stop) in [(tp - delta, tp + delta)]
             for series in [
@@ -86,12 +95,15 @@ def radiation_and_temperature(time, location_ids):
                     **default
                 ).series
             ]
+            for _, group in groupby(sorted(series), key=lambda k: k[0])
             for df in [
                 reduce(
                     lambda df1, df2: df1.join(df2, how="outer"),
                     [
                         DF(
-                            index=DI([stop for (_, stop, __) in tuples]),
+                            index=MI.from_product(
+                                [[k[0]], [stop for (_, stop, __) in tuples]]
+                            ),
                             data={
                                 (
                                     k[1]
@@ -100,10 +112,10 @@ def radiation_and_temperature(time, location_ids):
                                 ): [value for (_, __, value) in tuples],
                             },
                         )
-                        for k in series
+                        for k in group
                         for tuples in [series[k]]
                     ]
-                    or [DF(index=DI([]))],
+                    or [DF(index=MI.from_product([DI([])]))],
                 )
             ]
         ),
@@ -115,11 +127,17 @@ def radiation_and_temperature(time, location_ids):
         for day in date_range(tp - ydelta, tp + ydelta, freq="1d", tz="UTC")
     )
     ii = II(data=[Interval(day - daydelta, day + daydelta) for day in days])
-    df = df[[ii.contains(ix).any() for ix in df.index]]
+    df = df.loc[
+        (
+            slice(None),
+            [ii.contains(ix).any() for ix in df.index.get_level_values(1)],
+        ),
+        :,
+    ]
     return df
 
 
-df = radiation_and_temperature("10th January 9am", [location.id])
+df = radiation_and_temperature("10th January 9am", [l.id for l in locations])
 
 fields = [
     "ASWDIFD_S",
@@ -127,10 +145,9 @@ fields = [
     "ASWDIRN_S",
     "T: 10.0m",
 ]
-df.to_csv(
-    "rat.{0[0]}-{0[1]}.csv".format(
-        (lambda p: (p.x, p.y))(to_shape(location.point))
-    ),
-    columns=fields,
-    date_format="%Y-%m-%dT%H:%M:%S+00:00",
-)
+for point in df.index.levels[0]:
+    df.loc[point].to_csv(
+        "csvfiles/rat.{0[0]}-{0[1]}.csv".format(point),
+        columns=fields,
+        date_format="%Y-%m-%dT%H:%M:%S+00:00",
+    )
