@@ -68,54 +68,51 @@ def radiation_and_temperature(time, location_ids):
     timepoints = [tdt(time + " {}".format(year)) for year in range(2001, 2020)]
     delta = Timedelta("5d2h15m")
     df = concat(
-            df.groupby(
+        df.groupby(
+            [df.index.get_level_values(0), Grouper(freq="30min", level=-1),]
+        ).apply(lambda df: df if df.empty else df.mean())
+        for tp in timepoints
+        for (start, stop) in [(tp - delta, tp + delta)]
+        for series in [
+            open_FRED.Weather(
+                start=start,
+                stop=stop,
+                locations=[],
+                location_ids=location_ids,
+                heights=[10],
+                variables=[
+                    "ASWDIFD_S",
+                    "ASWDIR_S",
+                    "ASWDIRN_S",
+                    "T",
+                    # "T_2M",
+                ],
+                **default
+            ).series
+        ]
+        for _, group in groupby(sorted(series), key=lambda k: k[0])
+        for df in [
+            concat(
                 [
-                    df.index.get_level_values(0),
-                    Grouper(freq="30min", level=-1),
+                    DF(
+                        index=MI.from_product(
+                            [[k[0]], [stop for (_, stop, __) in tuples]]
+                        ),
+                        data={
+                            (
+                                k[1]
+                                if not k[2]
+                                else "{}: {}m".format(k[1], k[2])
+                            ): [value for (_, __, value) in tuples],
+                        },
+                    )
+                    for k in group
+                    for tuples in [series[k]]
                 ]
-            ).apply(lambda df: df if df.empty else df.mean())
-            for tp in timepoints
-            for (start, stop) in [(tp - delta, tp + delta)]
-            for series in [
-                open_FRED.Weather(
-                    start=start,
-                    stop=stop,
-                    locations=[],
-                    location_ids=location_ids,
-                    heights=[10],
-                    variables=[
-                        "ASWDIFD_S",
-                        "ASWDIR_S",
-                        "ASWDIRN_S",
-                        "T",
-                        # "T_2M",
-                    ],
-                    **default
-                ).series
-            ]
-            for _, group in groupby(sorted(series), key=lambda k: k[0])
-            for df in [
-                concat(
-                    [
-                        DF(
-                            index=MI.from_product(
-                                [[k[0]], [stop for (_, stop, __) in tuples]]
-                            ),
-                            data={
-                                (
-                                    k[1]
-                                    if not k[2]
-                                    else "{}: {}m".format(k[1], k[2])
-                                ): [value for (_, __, value) in tuples],
-                            },
-                        )
-                        for k in group
-                        for tuples in [series[k]]
-                    ]
-                    or [DF(index=MI.from_product([DI([])]))],
-                    axis=1
-                )
-            ]
+                or [DF(index=MI.from_product([DI([])]))],
+                axis=1,
+            )
+        ]
     )
     ydelta, daydelta = Timedelta("5d"), Timedelta("2h15m")
     days = (
