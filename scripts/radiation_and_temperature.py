@@ -1,4 +1,3 @@
-from functools import reduce
 from itertools import groupby
 from pprint import pprint as pp
 import sys
@@ -13,6 +12,7 @@ from pandas import (
     IntervalIndex as II,
     MultiIndex as MI,
     Timedelta,
+    concat,
     date_range,
     to_datetime as tdt,
 )
@@ -67,9 +67,7 @@ def radiation_and_temperature(time, location_ids):
     #   2019-01-01T00:00:00
     timepoints = [tdt(time + " {}".format(year)) for year in range(2001, 2020)]
     delta = Timedelta("5d2h15m")
-    df = reduce(
-        lambda df1, df2: df1.append(df2),
-        (
+    df = concat(
             df.groupby(
                 [
                     df.index.get_level_values(0),
@@ -97,8 +95,7 @@ def radiation_and_temperature(time, location_ids):
             ]
             for _, group in groupby(sorted(series), key=lambda k: k[0])
             for df in [
-                reduce(
-                    lambda df1, df2: df1.join(df2, how="outer"),
+                concat(
                     [
                         DF(
                             index=MI.from_product(
@@ -116,9 +113,9 @@ def radiation_and_temperature(time, location_ids):
                         for tuples in [series[k]]
                     ]
                     or [DF(index=MI.from_product([DI([])]))],
+                    axis=1
                 )
             ]
-        ),
     )
     ydelta, daydelta = Timedelta("5d"), Timedelta("2h15m")
     days = (
