@@ -66,17 +66,27 @@ def radiation_and_temperature(time, location_ids):
     #   2001-12-31T23:00:00
     #   2019-01-01T00:00:00
     timepoints = [tdt(time + " {}".format(year)) for year in range(2001, 2020)]
-    delta = Timedelta("5d2h15m")
-    df = concat(
-        df.groupby(
-            [df.index.get_level_values(0), Grouper(freq="30min", level=-1),]
-        ).apply(lambda df: df if df.empty else df.mean())
+    ydelta, daydelta = Timedelta("5d"), Timedelta("2h15m")
+    days = (
+        day
         for tp in timepoints
-        for (start, stop) in [(tp - delta, tp + delta)]
-        for series in [
-            open_FRED.Weather(
-                start=start,
-                stop=stop,
+        for day in date_range(tp - ydelta, tp + ydelta, freq="1d")
+    )
+    intervals = II(
+        data=[
+            Interval(day - daydelta, day + daydelta, closed="both")
+            for day in days
+        ]
+    )
+    tuples = [
+        (
+            k[0],
+            k[1] + ("" if k[2] == 0 else ": {}m".format(k[2])),
+            v[1].tz_localize(None),
+            v[2],
+        )
+        for k, vs in open_FRED.Weather(
+                ranges=list(intervals),
                 locations=[],
                 location_ids=location_ids,
                 heights=[10],
@@ -88,46 +98,25 @@ def radiation_and_temperature(time, location_ids):
                     # "T_2M",
                 ],
                 **default
-            ).series
-        ]
-        for _, group in groupby(sorted(series), key=lambda k: k[0])
-        for df in [
-            concat(
-                [
-                    DF(
-                        index=MI.from_product(
-                            [[k[0]], [stop for (_, stop, __) in tuples]]
-                        ),
-                        data={
-                            (
-                                k[1]
-                                if not k[2]
-                                else "{}: {}m".format(k[1], k[2])
-                            ): [value for (_, __, value) in tuples],
-                        },
-                    )
-                    for k in group
-                    for tuples in [series[k]]
-                ]
-                or [DF(index=MI.from_product([DI([])]))],
-                axis=1,
-            )
-        ]
-    )
-    ydelta, daydelta = Timedelta("5d"), Timedelta("2h15m")
-    days = (
-        day
-        for tp in timepoints
-        for day in date_range(tp - ydelta, tp + ydelta, freq="1d", tz="UTC")
-    )
-    ii = II(data=[Interval(day - daydelta, day + daydelta) for day in days])
-    df = df.loc[
-        (
-            slice(None),
-            [ii.contains(ix).any() for ix in df.index.get_level_values(1)],
-        ),
-        :,
+            ).series.items()
+        for v in vs
     ]
+    df = DF.from_records(tuples, index=[0, 2])
+    df = df.pivot(columns=1)
+    df = df.xs(slice(None), axis=1, level=0)
+    df = (
+        df.groupby(
+            [
+                df.index.get_level_values(0),
+                lambda index: intervals.get_loc(index[-1]),
+                Grouper(freq="30min", level=-1),
+            ]
+        )
+        .mean()
+        .xs(slice(None), level=-2)
+    )
+    df.index.names = df.index.names[:-1] + [None]
+
     return df
 
 
