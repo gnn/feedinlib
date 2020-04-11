@@ -95,7 +95,6 @@ def radiation_and_temperature(time, location_ids):
                     "ASWDIR_S",
                     "ASWDIRN_S",
                     "T",
-                    # "T_2M",
                 ],
                 **default
             ).series.items()
