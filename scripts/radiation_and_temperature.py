@@ -86,18 +86,13 @@ def radiation_and_temperature(time, location_ids):
             v[2],
         )
         for k, vs in open_FRED.Weather(
-                ranges=list(intervals),
-                locations=[],
-                location_ids=location_ids,
-                heights=[10],
-                variables=[
-                    "ASWDIFD_S",
-                    "ASWDIR_S",
-                    "ASWDIRN_S",
-                    "T",
-                ],
-                **default
-            ).series.items()
+            ranges=list(intervals),
+            locations=[],
+            location_ids=location_ids,
+            heights=[10],
+            variables=["ASWDIFD_S", "ASWDIR_S", "ASWDIRN_S", "T",],
+            **default
+        ).series.items()
         for v in vs
     ]
     df = DF.from_records(tuples, index=[0, 2])
